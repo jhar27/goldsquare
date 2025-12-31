@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Word Search Prototype</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: Arial, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      background: #1a1a2e;
+    }
+
+    .game-container {
+      display: flex;
+      gap: 40px;
+      align-items: flex-start;
+    }
+
+    #grid-container {
+      position: relative;
+    }
+
+    #canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      pointer-events: none;
+    }
+
+    #grid {
+      display: grid;
+      grid-template-columns: repeat(3, 120px);
+      grid-template-rows: repeat(3, 120px);
+      gap: 10px;
+      position: relative;
+    }
+
+    .cell {
+      width: 120px;
+      height: 120px;
+      background: #16213e;
+      border: 3px solid #0f3460;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 48px;
+      font-weight: bold;
+      color: #e94560;
+      cursor: pointer;
+      user-select: none;
+      transition: background 0.2s;
+    }
+
+    .cell.gold {
+      background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+      border-color: #fbbf24;
+      box-shadow: 0 0 20px rgba(251, 191, 36, 0.5);
+    }
+
+    .cell.gold:hover {
+      background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+    }
+
+    .cell.active {
+      background: #0f3460;
+      border-color: #e94560;
+    }
+
+    .sidebar {
+      background: #16213e;
+      padding: 30px;
+      border-radius: 8px;
+      width: 300px;
+    }
+
+    .sidebar h2 {
+      color: #e94560;
+      margin-bottom: 20px;
+      font-size: 24px;
+    }
+
+    .progress {
+      background: #0f3460;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      text-align: center;
+    }
+
+    .progress-label {
+      color: #888;
+      font-size: 14px;
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+
+    .progress-value {
+      color: #fff;
+      font-size: 36px;
+      font-weight: bold;
+    }
+
+    .progress-bar {
+      background: #0a1f3d;
+      height: 10px;
+      border-radius: 5px;
+      margin-top: 15px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      background: #22c55e;
+      height: 100%;
+      transition: width 0.3s;
+    }
+
+    .found-words {
+      max-height: 400px;
+      overflow-y: auto;
+    }
+
+    .found-words h3 {
+      color: #e94560;
+      margin-bottom: 15px;
+      font-size: 18px;
+    }
+
+    .word-item {
+      background: #0f3460;
+      padding: 10px 15px;
+      border-radius: 4px;
+      margin-bottom: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .word-text {
+      color: #fff;
+      font-weight: bold;
+      font-size: 16px;
+    }
+
+    .word-length {
+      color: #888;
+      font-size: 12px;
+    }
+
+    #message {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 15px 30px;
+      border-radius: 8px;
+      font-size: 18px;
+      font-weight: bold;
+      opacity: 0;
+      transition: opacity 0.3s;
+      pointer-events: none;
+      z-index: 1000;
+    }
+
+    #message.show {
+      opacity: 1;
+    }
+
+    #message.valid {
+      background: #22c55e;
+      color: white;
+    }
+
+    #message.invalid {
+      background: #ef4444;
+      color: white;
+    }
+
+    #message.duplicate {
+      background: #f59e0b;
+      color: white;
+    }
+
+    .loading {
+      color: #888;
+      text-align: center;
+      padding: 20px;
+    }
+
+    .victory {
+      background: #22c55e;
+      color: white;
+      padding: 20px;
+      border-radius: 8px;
+      text-align: center;
+      margin-bottom: 20px;
+      display: none;
+    }
+
+    .victory.show {
+      display: block;
+    }
+
+    .victory h3 {
+      margin-bottom: 10px;
+      font-size: 24px;
+    }
+  </style>
+</head>
+<body>
+  <div id="message"></div>
+  
+  <div class="game-container">
+    <div id="grid-container">
+      <canvas id="canvas" width="390" height="390"></canvas>
+      <div id="grid"></div>
+    </div>
+
+    <div class="sidebar">
+      <h2>Progress</h2>
+      
+      <div class="victory" id="victory">
+        <h3>🎉 Puzzle Complete!</h3>
+        <p>You found all the words!</p>
+      </div>
+
+      <div class="progress">
+        <div class="progress-label">Words Found</div>
+        <div class="progress-value">
+          <span id="found-count">0</span> / <span id="total-count">?</span>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-fill" id="progress-fill" style="width: 0%"></div>
+        </div>
+      </div>
+
+      <div class="found-words">
+        <h3>Found Words</h3>
+        <div id="words-list">
+          <div class="loading">Find words to get started!</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Random letters for the grid
+    const letters = ['K', 'G', 'T', 'S', 'R', 'E', 'D', 'O', 'G'];
+    const goldSquareIndex = 4; // Center square (index 0-8)
+    
+    // State
+    let dictionary = new Set();
+    let prefixSet = new Set();
+    let allPossibleWords = [];
+    let foundWords = new Set();
+    let isDragging = false;
+    let currentPath = [];
+    let canvas, ctx;
+
+    // Load dictionary and solve puzzle
+    async function loadDictionary() {
+      try {
+        const response = await fetch('dictionary.csv');
+        const text = await response.text();
+        const words = text.split('\n').map(w => w.trim().toUpperCase()).filter(w => w.length >= 5);
+        
+        dictionary = new Set(words);
+        
+        // Build prefix set
+        words.forEach(word => {
+          for (let i = 1; i <= word.length; i++) {
+            prefixSet.add(word.substring(0, i));
+          }
+        });
+        
+        console.log(`Loaded ${dictionary.size} words`);
+        
+        // Solve the puzzle
+        solvePuzzle();
+      } catch (error) {
+        console.error('Error loading dictionary:', error);
+      }
+    }
+
+    // Build adjacency graph
+    function buildGraph() {
+      const graph = {};
+      for (let i = 0; i < 9; i++) {
+        graph[i] = [];
+        const row = Math.floor(i / 3);
+        const col = i % 3;
+        
+        for (let j = 0; j < 9; j++) {
+          if (i === j) continue;
+          const row2 = Math.floor(j / 3);
+          const col2 = j % 3;
+          
+          const rowDiff = Math.abs(row - row2);
+          const colDiff = Math.abs(col - col2);
+          
+          if (rowDiff <= 1 && colDiff <= 1) {
+            graph[i].push(j);
+          }
+        }
+      }
+      return graph;
+    }
+
+    // Check if line segments intersect
+    function segmentsIntersect(p1, p2, p3, p4) {
+      const ccw = (A, B, C) => {
+        return (C.y - A.y) * (B.x - A.x) > (B.y - A.y) * (C.x - A.x);
+      };
+      return ccw(p1, p3, p4) !== ccw(p2, p3, p4) && ccw(p1, p2, p3) !== ccw(p1, p2, p4);
+    }
+
+    // Get position of cell for crossing check
+    function getPosition(index) {
+      return {
+        x: (index % 3) * 100 + 50,
+        y: Math.floor(index / 3) * 100 + 50
+      };
+    }
+
+    // Check if adding a cell would cause crossing
+    function wouldCrossPath(path, newIndex) {
+      if (path.length < 2) return false;
+      
+      const newPos = getPosition(newIndex);
+      const lastPos = getPosition(path[path.length - 1]);
+      
+      for (let i = 0; i < path.length - 2; i++) {
+        const p1 = getPosition(path[i]);
+        const p2 = getPosition(path[i + 1]);
+        
+        if (segmentsIntersect(lastPos, newPos, p1, p2)) {
+          return true;
+        }
+      }
+      
+      return false;
+    }
+
+    // DFS to find all valid words
+    function findAllWords() {
+      const found = new Set();
+      const graph = buildGraph();
+      const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+      
+      function dfs(path, currentWord) {
+        // Check if we have the gold square in our path
+        const hasGold = path.includes(goldSquareIndex);
+        
+        if (currentWord.length >= 5) {
+          if (hasGold) {
+            // Try all possible letters for the wildcard and add ALL valid words
+            const goldPosition = path.indexOf(goldSquareIndex);
+            for (const letter of alphabet) {
+              const testWord = currentWord.substring(0, goldPosition) + letter + currentWord.substring(goldPosition + 1);
+              if (dictionary.has(testWord)) {
+                found.add(testWord);
+              }
+            }
+          } else {
+            // No wildcard, check direct match
+            if (dictionary.has(currentWord)) {
+              found.add(currentWord);
+            }
+          }
+        }
+        
+        // For prefix pruning with wildcard
+        if (currentWord.length >= 2) {
+          let hasValidPrefix = false;
+          
+          if (hasGold) {
+            const goldPosition = path.indexOf(goldSquareIndex);
+            for (const letter of alphabet) {
+              const testWord = currentWord.substring(0, goldPosition) + letter + currentWord.substring(goldPosition + 1);
+              if (prefixSet.has(testWord)) {
+                hasValidPrefix = true;
+                break;
+              }
+            }
+          } else {
+            hasValidPrefix = prefixSet.has(currentWord);
+          }
+          
+          if (!hasValidPrefix) return;
+        }
+        
+        const lastIndex = path[path.length - 1];
+        for (const nextIndex of graph[lastIndex]) {
+          if (path.includes(nextIndex)) continue;
+          if (wouldCrossPath(path, nextIndex)) continue;
+          
+          const nextLetter = nextIndex === goldSquareIndex ? '*' : letters[nextIndex];
+          dfs([...path, nextIndex], currentWord + nextLetter);
+        }
+      }
+      
+      for (let i = 0; i < 9; i++) {
+        const startLetter = i === goldSquareIndex ? '*' : letters[i];
+        dfs([i], startLetter);
+      }
+      
+      return Array.from(found).sort();
+    }
+
+    // Solve puzzle and update UI
+    function solvePuzzle() {
+      allPossibleWords = findAllWords();
+      document.getElementById('total-count').textContent = allPossibleWords.length;
+      console.log(`Found ${allPossibleWords.length} possible words`);
+    }
+
+    // Update progress display
+    function updateProgress() {
+      const foundCount = foundWords.size;
+      const totalCount = allPossibleWords.length;
+      const percentage = totalCount > 0 ? (foundCount / totalCount) * 100 : 0;
+      
+      document.getElementById('found-count').textContent = foundCount;
+      document.getElementById('progress-fill').style.width = percentage + '%';
+      
+      // Check for victory
+      if (foundCount > 0 && foundCount === totalCount) {
+        document.getElementById('victory').classList.add('show');
+      }
+    }
+
+    // Add word to found list
+    function addFoundWord(word) {
+      const wordsList = document.getElementById('words-list');
+      
+      if (foundWords.size === 0) {
+        wordsList.innerHTML = '';
+      }
+      
+      foundWords.add(word);
+      
+      const wordItem = document.createElement('div');
+      wordItem.className = 'word-item';
+      wordItem.innerHTML = `
+        <span class="word-text">${word}</span>
+        <span class="word-length">${word.length} letters</span>
+      `;
+      wordsList.insertBefore(wordItem, wordsList.firstChild);
+      
+      updateProgress();
+    }
+
+    // Initialize grid
+    function initGrid() {
+      const grid = document.getElementById('grid');
+      canvas = document.getElementById('canvas');
+      ctx = canvas.getContext('2d');
+
+      letters.forEach((letter, i) => {
+        const cell = document.createElement('div');
+        cell.className = 'cell';
+        if (i === goldSquareIndex) {
+          cell.classList.add('gold');
+          cell.textContent = ''; // Gold square is empty
+        } else {
+          cell.textContent = letter;
+        }
+        cell.dataset.index = i;
+        cell.dataset.row = Math.floor(i / 3);
+        cell.dataset.col = i % 3;
+        
+        cell.addEventListener('mousedown', handleMouseDown);
+        cell.addEventListener('mouseenter', handleMouseEnter);
+        
+        grid.appendChild(cell);
+      });
+
+      document.addEventListener('mouseup', handleMouseUp);
+    }
+
+    // Check if two cells are adjacent
+    function areAdjacent(cell1, cell2) {
+      const row1 = parseInt(cell1.dataset.row);
+      const col1 = parseInt(cell1.dataset.col);
+      const row2 = parseInt(cell2.dataset.row);
+      const col2 = parseInt(cell2.dataset.col);
+      
+      const rowDiff = Math.abs(row1 - row2);
+      const colDiff = Math.abs(col1 - col2);
+      
+      return rowDiff <= 1 && colDiff <= 1 && (rowDiff + colDiff > 0);
+    }
+
+    // Get center position of cell
+    function getCellCenter(cell) {
+      const rect = cell.getBoundingClientRect();
+      const gridRect = document.getElementById('grid').getBoundingClientRect();
+      return {
+        x: rect.left + rect.width / 2 - gridRect.left,
+        y: rect.top + rect.height / 2 - gridRect.top
+      };
+    }
+
+    // Check if adding a cell would cause line crossing
+    function wouldCross(newCell) {
+      if (currentPath.length < 2) return false;
+      
+      const newPos = getCellCenter(newCell);
+      const lastPos = getCellCenter(currentPath[currentPath.length - 1]);
+      
+      for (let i = 0; i < currentPath.length - 2; i++) {
+        const p1 = getCellCenter(currentPath[i]);
+        const p2 = getCellCenter(currentPath[i + 1]);
+        
+        if (segmentsIntersect(lastPos, newPos, p1, p2)) {
+          return true;
+        }
+      }
+      
+      return false;
+    }
+
+    // Draw line on canvas
+    function drawLine() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      if (currentPath.length < 2) return;
+      
+      ctx.strokeStyle = '#3b82f6';
+      ctx.lineWidth = 4;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      
+      ctx.beginPath();
+      const firstPos = getCellCenter(currentPath[0]);
+      ctx.moveTo(firstPos.x, firstPos.y);
+      
+      for (let i = 1; i < currentPath.length; i++) {
+        const pos = getCellCenter(currentPath[i]);
+        ctx.lineTo(pos.x, pos.y);
+      }
+      
+      ctx.stroke();
+    }
+
+    // Check if word is valid and return all matching words (considering wildcard)
+    function getValidWords(word, pathIndices) {
+      const validWords = [];
+      
+      // Check if path contains gold square
+      const hasGold = pathIndices.includes(goldSquareIndex);
+      
+      if (!hasGold) {
+        // No wildcard, check direct match
+        if (dictionary.has(word)) {
+          validWords.push(word);
+        }
+        return validWords;
+      }
+      
+      // Try all possible letters for the wildcard
+      const goldPosition = pathIndices.indexOf(goldSquareIndex);
+      const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+      
+      for (const letter of alphabet) {
+        const testWord = word.substring(0, goldPosition) + letter + word.substring(goldPosition + 1);
+        if (dictionary.has(testWord) && !foundWords.has(testWord)) {
+          validWords.push(testWord);
+        }
+      }
+      
+      return validWords;
+    }
+    function showMessage(text, type) {
+      const message = document.getElementById('message');
+      message.textContent = text;
+      message.className = `show ${type}`;
+      
+      setTimeout(() => {
+        message.classList.remove('show');
+      }, 2000);
+    }
+
+    // Mouse handlers
+    function handleMouseDown(e) {
+      isDragging = true;
+      currentPath = [e.currentTarget];
+      e.currentTarget.classList.add('active');
+      drawLine();
+    }
+
+    function handleMouseEnter(e) {
+      if (!isDragging) return;
+      
+      const cell = e.currentTarget;
+      const lastCell = currentPath[currentPath.length - 1];
+      
+      if (currentPath.includes(cell)) return;
+      if (!areAdjacent(lastCell, cell)) return;
+      if (wouldCross(cell)) return;
+      
+      currentPath.push(cell);
+      cell.classList.add('active');
+      drawLine();
+    }
+
+    function handleMouseUp() {
+      if (!isDragging) return;
+      
+      isDragging = false;
+      
+      const word = currentPath.map(cell => {
+        const idx = parseInt(cell.dataset.index);
+        return idx === goldSquareIndex ? '*' : cell.textContent;
+      }).join('');
+      const pathIndices = currentPath.map(cell => parseInt(cell.dataset.index));
+      
+      if (word.length >= 5) {
+        const validWords = getValidWords(word, pathIndices);
+        
+        if (validWords.length > 0) {
+          // Add all valid words
+          validWords.forEach(validWord => {
+            addFoundWord(validWord);
+          });
+          
+          // Show message with all found words
+          if (validWords.length === 1) {
+            showMessage(`${validWords[0]} ✓`, 'valid');
+          } else {
+            showMessage(`${validWords.join(', ')} ✓`, 'valid');
+          }
+        } else {
+          // Check if all possible words from this path were already found
+          const allPossibleWords = getValidWords(word, pathIndices, true);
+          if (allPossibleWords.length > 0) {
+            showMessage(`Already found all words from this path!`, 'duplicate');
+          } else {
+            showMessage(`${word} ✗`, 'invalid');
+          }
+        }
+      }
+      
+      currentPath.forEach(cell => cell.classList.remove('active'));
+      currentPath = [];
+      
+      // Fade out line
+      ctx.globalAlpha = 1;
+      let opacity = 1;
+      const fadeInterval = setInterval(() => {
+        opacity -= 0.1;
+        if (opacity <= 0) {
+          clearInterval(fadeInterval);
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.globalAlpha = 1;
+        } else {
+          ctx.globalAlpha = opacity;
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          drawLine();
+        }
+      }, 50);
+    }
+
+    // Initialize
+    loadDictionary();
+    initGrid();
+  </script>
+</body>
+</html>

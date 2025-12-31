@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Word Search Solver</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: Arial, sans-serif;
+      padding: 40px;
+      background: #1a1a2e;
+      color: #fff;
+    }
+
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      margin-bottom: 30px;
+      color: #e94560;
+    }
+
+    .input-section {
+      background: #16213e;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 8px;
+      color: #e94560;
+      font-weight: bold;
+    }
+
+    input {
+      width: 100%;
+      padding: 10px;
+      font-size: 16px;
+      border: 2px solid #0f3460;
+      border-radius: 4px;
+      background: #0f3460;
+      color: #fff;
+      text-transform: uppercase;
+    }
+
+    input::placeholder {
+      color: #888;
+      text-transform: none;
+    }
+
+    button {
+      background: #e94560;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      font-size: 16px;
+      font-weight: bold;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-top: 15px;
+    }
+
+    button:hover {
+      background: #d63651;
+    }
+
+    button:disabled {
+      background: #666;
+      cursor: not-allowed;
+    }
+
+    .results {
+      background: #16213e;
+      padding: 20px;
+      border-radius: 8px;
+      margin-top: 20px;
+    }
+
+    .stats {
+      display: flex;
+      gap: 20px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .stat {
+      background: #0f3460;
+      padding: 15px 20px;
+      border-radius: 4px;
+      flex: 1;
+      min-width: 150px;
+    }
+
+    .stat-label {
+      font-size: 12px;
+      color: #888;
+      text-transform: uppercase;
+    }
+
+    .stat-value {
+      font-size: 24px;
+      font-weight: bold;
+      color: #e94560;
+      margin-top: 5px;
+    }
+
+    .words-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 10px;
+      margin-top: 20px;
+    }
+
+    .word-item {
+      background: #0f3460;
+      padding: 10px;
+      border-radius: 4px;
+      font-weight: bold;
+    }
+
+    .word-length {
+      color: #888;
+      font-size: 12px;
+      margin-left: 5px;
+    }
+
+    #loading {
+      display: none;
+      color: #e94560;
+      margin-top: 10px;
+    }
+
+    .hint {
+      color: #888;
+      font-size: 14px;
+      margin-top: 5px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Word Search Solver</h1>
+    
+    <div class="input-section">
+      <label>Enter 9 Letters (row by row)</label>
+      <input type="text" id="letters-input" placeholder="e.g., CAT*REDOP" maxlength="9">
+      <div class="hint">Enter exactly 9 letters for a 3x3 grid. Use * for the gold square (wildcard).</div>
+      
+      <button id="solve-btn" onclick="solvePuzzle()">Solve Puzzle</button>
+      <button onclick="loadDictionary()" id="load-dict-btn">Load Dictionary First</button>
+      <div id="loading">Solving...</div>
+    </div>
+
+    <div id="results" class="results" style="display: none;">
+      <h2>Results</h2>
+      <div class="stats">
+        <div class="stat">
+          <div class="stat-label">Total Words</div>
+          <div class="stat-value" id="total-words">0</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">5 Letters</div>
+          <div class="stat-value" id="five-letter">0</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">6+ Letters</div>
+          <div class="stat-value" id="six-plus">0</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Longest Word</div>
+          <div class="stat-value" id="longest">-</div>
+        </div>
+      </div>
+      
+      <h3>All Words Found:</h3>
+      <div class="words-list" id="words-list"></div>
+    </div>
+  </div>
+
+  <script>
+    let dictionary = new Set();
+    let prefixSet = new Set();
+
+    // Load dictionary
+    async function loadDictionary() {
+      const btn = document.getElementById('load-dict-btn');
+      btn.textContent = 'Loading...';
+      btn.disabled = true;
+      
+      try {
+        const response = await fetch('dictionary.csv');
+        const text = await response.text();
+        const words = text.split('\n').map(w => w.trim().toUpperCase()).filter(w => w.length >= 5);
+        
+        dictionary = new Set(words);
+        
+        // Build prefix set for pruning
+        words.forEach(word => {
+          for (let i = 1; i <= word.length; i++) {
+            prefixSet.add(word.substring(0, i));
+          }
+        });
+        
+        btn.textContent = `Dictionary Loaded (${dictionary.size} words)`;
+        btn.style.background = '#22c55e';
+        document.getElementById('solve-btn').disabled = false;
+        
+        console.log(`Loaded ${dictionary.size} words with ${prefixSet.size} prefixes`);
+      } catch (error) {
+        console.error('Error loading dictionary:', error);
+        btn.textContent = 'Error Loading Dictionary';
+        btn.style.background = '#ef4444';
+        btn.disabled = false;
+      }
+    }
+
+    // Build adjacency graph
+    function buildGraph() {
+      const graph = {};
+      for (let i = 0; i < 9; i++) {
+        graph[i] = [];
+        const row = Math.floor(i / 3);
+        const col = i % 3;
+        
+        for (let j = 0; j < 9; j++) {
+          if (i === j) continue;
+          const row2 = Math.floor(j / 3);
+          const col2 = j % 3;
+          
+          const rowDiff = Math.abs(row - row2);
+          const colDiff = Math.abs(col - col2);
+          
+          if (rowDiff <= 1 && colDiff <= 1) {
+            graph[i].push(j);
+          }
+        }
+      }
+      return graph;
+    }
+
+    // Check if line segments intersect
+    function segmentsIntersect(p1, p2, p3, p4) {
+      const ccw = (A, B, C) => {
+        return (C.y - A.y) * (B.x - A.x) > (B.y - A.y) * (C.x - A.x);
+      };
+      return ccw(p1, p3, p4) !== ccw(p2, p3, p4) && ccw(p1, p2, p3) !== ccw(p1, p2, p4);
+    }
+
+    // Get position of cell
+    function getPosition(index) {
+      return {
+        x: (index % 3) * 100 + 50,
+        y: Math.floor(index / 3) * 100 + 50
+      };
+    }
+
+    // Check if adding a cell would cause crossing
+    function wouldCross(path, newIndex) {
+      if (path.length < 2) return false;
+      
+      const newPos = getPosition(newIndex);
+      const lastPos = getPosition(path[path.length - 1]);
+      
+      for (let i = 0; i < path.length - 2; i++) {
+        const p1 = getPosition(path[i]);
+        const p2 = getPosition(path[i + 1]);
+        
+        if (segmentsIntersect(lastPos, newPos, p1, p2)) {
+          return true;
+        }
+      }
+      
+      return false;
+    }
+
+    // DFS to find all valid words
+    function findAllWords(letters, graph, goldSquareIndex) {
+      const foundWords = new Set();
+      const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+      
+      function dfs(path, currentWord) {
+        // Check if current word is valid
+        const hasGold = goldSquareIndex !== -1 && path.includes(goldSquareIndex);
+        
+        if (currentWord.length >= 5) {
+          if (hasGold) {
+            // Try all possible letters for the wildcard
+            const goldPosition = path.indexOf(goldSquareIndex);
+            for (const letter of alphabet) {
+              const testWord = currentWord.substring(0, goldPosition) + letter + currentWord.substring(goldPosition + 1);
+              if (dictionary.has(testWord)) {
+                foundWords.add(testWord);
+              }
+            }
+          } else {
+            if (dictionary.has(currentWord)) {
+              foundWords.add(currentWord);
+            }
+          }
+        }
+        
+        // Prune if not a valid prefix
+        if (currentWord.length >= 2) {
+          let hasValidPrefix = false;
+          
+          if (hasGold) {
+            const goldPosition = path.indexOf(goldSquareIndex);
+            for (const letter of alphabet) {
+              const testWord = currentWord.substring(0, goldPosition) + letter + currentWord.substring(goldPosition + 1);
+              if (prefixSet.has(testWord)) {
+                hasValidPrefix = true;
+                break;
+              }
+            }
+          } else {
+            hasValidPrefix = prefixSet.has(currentWord);
+          }
+          
+          if (!hasValidPrefix) return;
+        }
+        
+        // Try extending the path
+        const lastIndex = path[path.length - 1];
+        for (const nextIndex of graph[lastIndex]) {
+          // Check constraints
+          if (path.includes(nextIndex)) continue; // Already visited
+          if (wouldCross(path, nextIndex)) continue; // Would cross
+          
+          // Recurse
+          const nextLetter = letters[nextIndex];
+          dfs([...path, nextIndex], currentWord + nextLetter);
+        }
+      }
+      
+      // Start DFS from each cell
+      for (let i = 0; i < 9; i++) {
+        dfs([i], letters[i]);
+      }
+      
+      return Array.from(foundWords).sort();
+    }
+
+    // Solve the puzzle
+    function solvePuzzle() {
+      const input = document.getElementById('letters-input').value.toUpperCase().trim();
+      
+      if (input.length !== 9) {
+        alert('Please enter exactly 9 letters');
+        return;
+      }
+      
+      if (dictionary.size === 0) {
+        alert('Please load the dictionary first');
+        return;
+      }
+      
+      const loading = document.getElementById('loading');
+      loading.style.display = 'block';
+      
+      // Use setTimeout to allow UI to update
+      setTimeout(() => {
+        const letters = input.split('');
+        const goldSquareIndex = letters.indexOf('*');
+        const graph = buildGraph();
+        const words = findAllWords(letters, graph, goldSquareIndex);
+        
+        displayResults(words);
+        loading.style.display = 'none';
+      }, 100);
+    }
+
+    // Display results
+    function displayResults(words) {
+      const resultsDiv = document.getElementById('results');
+      resultsDiv.style.display = 'block';
+      
+      // Calculate stats
+      const fiveLetters = words.filter(w => w.length === 5).length;
+      const sixPlus = words.filter(w => w.length >= 6).length;
+      const longest = words.reduce((max, w) => w.length > max.length ? w : max, '');
+      
+      document.getElementById('total-words').textContent = words.length;
+      document.getElementById('five-letter').textContent = fiveLetters;
+      document.getElementById('six-plus').textContent = sixPlus;
+      document.getElementById('longest').textContent = longest || '-';
+      
+      // Display words
+      const wordsList = document.getElementById('words-list');
+      wordsList.innerHTML = '';
+      
+      words.forEach(word => {
+        const div = document.createElement('div');
+        div.className = 'word-item';
+        div.innerHTML = `${word}<span class="word-length">(${word.length})</span>`;
+        wordsList.appendChild(div);
+      });
+    }
+
+    // Initialize
+    document.getElementById('solve-btn').disabled = true;
+  </script>
+</body>
+</html>
