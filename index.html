@@ -41,7 +41,7 @@
       display: grid;
       grid-template-columns: repeat(3, 120px);
       grid-template-rows: repeat(3, 120px);
-      gap: 10px;
+      gap: 20px;
       position: relative;
     }
 
@@ -76,18 +76,25 @@
       border-color: #e94560;
     }
 
+    .cell.gold.active {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  border-color: #e94560;
+  box-shadow: 0 0 20px rgba(251, 191, 36, 0.5);
+}
+    
     .sidebar {
       background: #16213e;
       padding: 30px;
       border-radius: 8px;
       width: 300px;
     }
-    
+
 @media screen and (max-width: 800px) {
   .sidebar {
     display: none;
   }
 }
+
 
     .sidebar h2 {
       color: #e94560;
@@ -610,6 +617,15 @@
       const cell = e.currentTarget;
       const lastCell = currentPath[currentPath.length - 1];
       
+      // Check if we're hovering over the second-to-last cell (backtracking)
+      if (currentPath.length >= 2 && cell === currentPath[currentPath.length - 2]) {
+        // Remove the last cell from the path
+        const removedCell = currentPath.pop();
+        removedCell.classList.remove('active');
+        drawLine();
+        return;
+      }
+      
       if (currentPath.includes(cell)) return;
       if (!areAdjacent(lastCell, cell)) return;
       if (wouldCross(cell)) return;
@@ -620,61 +636,82 @@
     }
 
     function handleMouseUp() {
-      if (!isDragging) return;
+  if (!isDragging) return;
+  
+  isDragging = false;
+  
+  const word = currentPath.map(cell => {
+    const idx = parseInt(cell.dataset.index);
+    return idx === goldSquareIndex ? '*' : cell.textContent;
+  }).join('');
+  const pathIndices = currentPath.map(cell => parseInt(cell.dataset.index));
+  
+  if (word.length < 5) {
+    showMessage(`Word must be at least 5 letters`, 'invalid');
+  } else {
+    const validWords = getValidWords(word, pathIndices);
+    
+    if (validWords.length > 0) {
+      // Add all valid words
+      validWords.forEach(validWord => {
+        addFoundWord(validWord);
+      });
       
-      isDragging = false;
+      // Show message with all found words
+      if (validWords.length === 1) {
+        showMessage(`${validWords[0]} ✓`, 'valid');
+      } else {
+        showMessage(`${validWords.join(', ')} ✓`, 'valid');
+      }
+    } else {
+      // Check if any words from this path were already found
+      const hasGold = pathIndices.includes(goldSquareIndex);
+      let alreadyFound = false;
       
-      const word = currentPath.map(cell => {
-        const idx = parseInt(cell.dataset.index);
-        return idx === goldSquareIndex ? '*' : cell.textContent;
-      }).join('');
-      const pathIndices = currentPath.map(cell => parseInt(cell.dataset.index));
-      
-      if (word.length >= 5) {
-        const validWords = getValidWords(word, pathIndices);
+      if (hasGold) {
+        const goldPosition = pathIndices.indexOf(goldSquareIndex);
+        const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
         
-        if (validWords.length > 0) {
-          // Add all valid words
-          validWords.forEach(validWord => {
-            addFoundWord(validWord);
-          });
-          
-          // Show message with all found words
-          if (validWords.length === 1) {
-            showMessage(`${validWords[0]} ✓`, 'valid');
-          } else {
-            showMessage(`${validWords.join(', ')} ✓`, 'valid');
+        for (const letter of alphabet) {
+          const testWord = word.substring(0, goldPosition) + letter + word.substring(goldPosition + 1);
+          if (dictionary.has(testWord) && foundWords.has(testWord)) {
+            alreadyFound = true;
+            break;
           }
-        } else {
-          // Check if all possible words from this path were already found
-          const allPossibleWords = getValidWords(word, pathIndices, true);
-          if (allPossibleWords.length > 0) {
-            showMessage(`Already found all words from this path!`, 'duplicate');
-          } else {
-            showMessage(`${word} ✗`, 'invalid');
-          }
+        }
+      } else {
+        if (dictionary.has(word) && foundWords.has(word)) {
+          alreadyFound = true;
         }
       }
       
-      currentPath.forEach(cell => cell.classList.remove('active'));
-      currentPath = [];
-      
-      // Fade out line
-      ctx.globalAlpha = 1;
-      let opacity = 1;
-      const fadeInterval = setInterval(() => {
-        opacity -= 0.1;
-        if (opacity <= 0) {
-          clearInterval(fadeInterval);
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
-          ctx.globalAlpha = 1;
-        } else {
-          ctx.globalAlpha = opacity;
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
-          drawLine();
-        }
-      }, 50);
+      if (alreadyFound) {
+        showMessage(`Already found!`, 'duplicate');
+      } else {
+        showMessage(`${word} ✗`, 'invalid');
+      }
     }
+  }
+  
+  currentPath.forEach(cell => cell.classList.remove('active'));
+  currentPath = [];
+  
+  // Fade out line
+  ctx.globalAlpha = 1;
+  let opacity = 1;
+  const fadeInterval = setInterval(() => {
+    opacity -= 0.1;
+    if (opacity <= 0) {
+      clearInterval(fadeInterval);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.globalAlpha = 1;
+    } else {
+      ctx.globalAlpha = opacity;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      drawLine();
+    }
+  }, 50);
+}
 
     // Initialize
     loadDictionary();
